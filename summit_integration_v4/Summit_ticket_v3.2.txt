@@ -1,0 +1,112 @@
+<#
+
+Name      : SymphonySummit Integration
+
+Version   : 2.0
+
+Developer : CIS - Automation Factory
+
+Features  : read ticket data from symphony summit and push the ticket to healix
+
+Description : This will read the details from symphony summit.
+
+#>
+
+#Summit - Data
+$user = "hoautomation@gtaa.com"
+$pass = "Welcome@123"
+$org_ID = "1"
+$Instance = "IT"
+$State = "In-Progress"
+#$work_group = "SERVICE DESK"#"INF-MONITORING"
+$caller_mail = "HP_OMI_Event@symphonysummit.com"
+$caller_name = "HP OMI Event"
+
+$summit_uri = "https://itservicedeskportaldev.ppcgtaa.com/API/REST/Summit_RESTWCF.svc/RestService/CommonWS_JsonObjCall"
+
+$proxy = '{"ReturnType": "JSON","Password": "'+$pass+'" ,"UserName": "'+$user+'","ProxyID":0,"OrgID":1}'
+$filter = '{"InputString": "{\"Status\":\"'+$State+'\",\"Caller Email\":\"'+$caller_mail+'\",\"Caller User Name\":\"'+$caller_name+'\"}"}'
+$commom_parm ='{"_ProxyDetails":' +$proxy+' ,"ServiceName": "IM_Getincident_List","objDynamicWebService":'+$filter+' }'
+
+
+try{
+
+        #Rest API call to summit
+        function rest_Api_call{
+        [cmdletbinding()]
+            param(
+                $body_data,$action
+            )
+
+            try{
+                Write-Host "in restcall"
+                $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $user, $pass)))
+                # Set proper headers
+                $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+                $headers.Add('Authorization',('Basic {0}' -f $base64AuthInfo))
+                $headers.Add('Accept','application/json')
+                $headers.Add('Content-Type','application/json')
+                $method = "post"                
+                #$data = $body_data.Replace("'",'"')
+                #Write-Host $data
+                $response = Invoke-WebRequest -Headers $headers -Method $method -Uri $summit_uri -Body $body_data
+                #Write-Host $response
+                
+                $res_val = $response.RawContent.Split("`n")[-1] | ConvertFrom-Json
+                if($action -like "*update*"){
+                    return $res_val
+                }
+                else{
+                    return $res_val.OutputObject
+                    }
+            }
+            catch{
+                 $_
+                 return "API is NotReachable"
+            }
+ }
+        
+        #fetch all the data from a work group
+        $body = "{
+                    ""ServiceName"": ""$servicename"",
+                    ""objCommonParameters"": $commom_parm
+                 }"
+        #summit rest call
+        
+    $test_body = '{"ServiceName": "ADM_Get_DynamicWebServiceResult","objCommonParameters": '+$commom_parm+'}'
+
+        $read_output = rest_Api_call -body_data $test_body
+        
+        if ($read_output -notlike "*NotReachable*"){
+            
+            $ticket_dump = $read_output.SUBROOT
+            [System.Collections.ArrayList]$jsonContent= @()
+            $Inc_ID = "Ticket No"
+            foreach($ticket in $ticket_dump){
+                $id = $ticket.$Inc_ID
+                $inc_host = $ticket.Configuration_Item
+                $short_Desc = $ticket.Symptom
+                ###################
+
+
+                    Write-Host "inc_host"$inc_host 
+                    Write-Host "short_Desc"$short_Desc 
+                    Write-Host "id"$id
+                    
+                    [hashtable]$Object =@{}
+                $Object."inc_host" = $inc_host
+                $Object."id" = $id
+                $Object."short_Desc" = $short_Desc 
+                #Appening data
+                $Object | ConvertTo-Json
+                $jsonContent.Add($Object)
+               
+            
+        }
+        $data_content = $jsonContent | ConvertTo-Json 
+        $data_content
+}
+}
+catch{
+    $_
+}

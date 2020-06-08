@@ -1,0 +1,69 @@
+<#
+
+Name      : Healix Push Pull Data
+
+Version   : 2.0
+
+Developer : CIS - Automation Factory
+
+Features  : Push the data from Symphony summit to Healix
+
+Description : This will push the data from symphony summit to Healix.
+
+#>
+
+#Convert from Json
+$jsonPath = $data_content | ConvertFrom-Json
+
+
+for($i=0;$i -lt $jsonPath.count;$i++){
+    try{
+        #Reading the Incident number, short description and ID
+        $var_count = $jsonPath[$i]
+        $id = $var_count.id
+        $inc_host = $var_count.inc_host
+        $short_Desc = $var_count.short_Desc
+            
+            #Account ID
+            $Account_ID = "205"
+            
+            #APIKey 
+            $Apikey = "8D5A6AE6A37AC13"
+            
+            #Healix URL
+            $healix_Url = "http://10.181.11.183:8080/api/Agent/PushAlert/"
+
+            #Headers
+            $head = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+            $head.Add('apikey',$Apikey)
+            $head.Add('Accept','application/json')
+            $head.Add('Content-Type','application/json')
+
+            #Rest body content
+            $healix_Body = "{
+                             ""AccountId"": ""$Account_ID"",
+                             ""HostName"": ""$inc_host"",
+                             ""AlertDescription"": ""$short_Desc"",
+                             ""ITSMTicketId"": ""$id"",
+                             ""ManualParameterIdentificationRequired"": ""False""
+                            }"
+
+            #Calling the rest method
+            $Res = Invoke-RestMethod -Method 'Post' -Uri $healix_Url -Body $healix_Body -Headers $head
+                        
+
+            #$Res.IsFailure
+            if($Res.IsFailure -like "*True*"){
+                    
+                Write-Output $Res.Msg
+            }
+            if($Res.IsFailure -like "*False*"){
+                    
+                Write-Output "successfull"
+            }
+        
+        }   
+        catch{
+            $_
+        }
+}
